@@ -2,6 +2,7 @@ import regl from 'regl'
 import { CoreModule } from '@/graph/modules/core-module'
 import calculateLevelFrag from '@/graph/modules/ForceManyBody/calculate-level.frag'
 import calculateLevelVert from '@/graph/modules/ForceManyBody/calculate-level.vert'
+import calculateNextLevel from '@/graph/modules/ForceManyBody/calc-next-level.frag'
 import forceFrag from '@/graph/modules/ForceManyBody/force-level.frag'
 import forceCenterFrag from '@/graph/modules/ForceManyBody/force-centermass.frag'
 import { createIndexesBuffer, createQuadBuffer, destroyFramebuffer } from '@/graph/modules/Shared/buffer'
@@ -18,7 +19,7 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
   private forceCommand: regl.DrawCommand | undefined
   private forceFromItsOwnCentermassCommand: regl.DrawCommand | undefined
   private quadtreeLevels = 0
-  private theta: number | undefined
+  private calculateNextLevel: regl.DrawCommand | undefined
 
   public create (): void {
     const { reglInstance, store } = this
@@ -54,7 +55,6 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
 
   public initPrograms (): void {
     const { reglInstance, config, store, data, points } = this
-    this.theta = config.simulation?.repulsionTheta
     this.clearLevelsCommand = reglInstance({
       frag: clearFrag,
       vert: updateVert,
@@ -75,6 +75,33 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
         pointsTextureSize: () => store.pointsTextureSize,
         levelTextureSize: (_: regl.DefaultContext, props: { levelTextureSize: number }) => props.levelTextureSize,
         cellSize: (_: regl.DefaultContext, props: { cellSize: number }) => props.cellSize,
+      },
+      blend: {
+        enable: true,
+        func: {
+          src: 'one',
+          dst: 'one',
+        },
+        equation: {
+          rgb: 'add',
+          alpha: 'add',
+        },
+      },
+      depth: { enable: false, mask: false },
+      stencil: { enable: false },
+    })
+    this.calculateNextLevel = reglInstance({
+      frag: calculateNextLevel,
+      vert: updateVert,
+      framebuffer: (_: regl.DefaultContext, props: { levelFbo: regl.Framebuffer2D; levelTextureSize: number; prevFbo: regl.Framebuffer2D }) => props.levelFbo,
+      primitive: 'triangle strip',
+      count: 4,
+      attributes: {
+        quad: createQuadBuffer(reglInstance),
+      },
+      uniforms: {
+        prevFbo: (_, props) => props.prevFbo,
+        levelTextureSize: (_, props) => props.levelTextureSize,
       },
       blend: {
         enable: true,
@@ -177,13 +204,32 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
         cellSize,
       })
     }
+    // bellow is trying to speedup levelFbo calculation, but seems not so fast...
+    // const i = this.quadtreeLevels - 1
+    // this.clearLevelsCommand?.({ levelFbo: this.levelsFbos.get(`levelFbo[${i}]`) })
+    // let levelTextureSize = Math.pow(2, i + 1)
+    // const cellSize = store.adjustedSpaceSize / levelTextureSize
+    // this.calculateLevelsCommand?.({
+    //   levelFbo: this.levelsFbos.get(`levelFbo[${i}]`),
+    //   levelTextureSize,
+    //   cellSize,
+    // })
+    // for (let j = i - 1; j >= 0; j -= 1) {
+    //   levelTextureSize = Math.pow(2, j + 1)
+    //   this.clearLevelsCommand?.({ levelFbo: this.levelsFbos.get(`levelFbo[${j}]`) })
+    //   this.calculateNextLevel?.({
+    //     levelFbo: this.levelsFbos.get(`levelFbo[${j}]`),
+    //     levelTextureSize,
+    //     prevFbo: this.levelsFbos.get(`levelFbo[${j + 1}]`),
+    //   })
+    // }
 
     // this.clearVelocityCommand?.()
     // this.forceCommand?.()
 
     let levelTextureSize = 0.0
     const totalLv = Math.floor(this.quadtreeLevels / 1)
-    for (let i = 0; i < totalLv; i += 1) {
+    for (let i = 0; i < totalLv - 2; i += 1) {
       levelTextureSize = Math.pow(2, i + 1)
       this.forceCommand?.({
         levelFbo: this.levelsFbos.get(`levelFbo[${i}]`),

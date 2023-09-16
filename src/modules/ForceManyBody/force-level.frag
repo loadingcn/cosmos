@@ -89,11 +89,9 @@ void main() {
     maxj = max(maxj, n_bottom); 
     maxj = floor(maxj);
 
-    for (float i = 0.0; i <= 12.0; i += 1.0) {
-      if ( i > maxi ) break;
+    for (float i = 0.0; i <= 6.0; i += 1.0) {
 
-      for (float j = 0.0; j <= 4.0; j += 1.0) {
-        //if ( j > maxj) break;
+      for (float j = 0.0; j <= 2.0; j += 1.0) {
 
         float n = left + cellSize * j;
         float m = top + cellSize * n_top + cellSize * i;

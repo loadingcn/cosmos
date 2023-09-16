@@ -1,7 +1,9 @@
 import regl from 'regl'
 import { CoreModule } from '@/graph/modules/core-module'
 import { forceFrag } from '@/graph/modules/ForceLink/force-spring'
-import { createQuadBuffer, destroyFramebuffer } from '@/graph/modules/Shared/buffer'
+import quickVert from '@/graph/modules/ForceLink/force-spring.vert'
+import quickFrag from '@/graph/modules/ForceLink/force-spring.frag'
+import { createQuadBuffer, createIndexesBuffer, destroyFramebuffer } from '@/graph/modules/Shared/buffer'
 import updateVert from '@/graph/modules/Shared/quad.vert'
 import { CosmosInputNode, CosmosInputLink } from '@/graph/types'
 
@@ -19,6 +21,8 @@ export class ForceLink<N extends CosmosInputNode, L extends CosmosInputLink> ext
   public indices: Float32Array = new Float32Array()
   public maxPointDegree = 0
   private runCommand: regl.DrawCommand | undefined
+  private quickRunCmd: regl.DrawCommand | undefined
+  private totalLinks = 0
 
   public create (direction: LinkDirection): void {
     const { reglInstance, store: { pointsTextureSize, linksTextureSize }, data } = this
@@ -39,6 +43,8 @@ export class ForceLink<N extends CosmosInputNode, L extends CosmosInputLink> ext
       connectedNodeIndices.forEach((connectedNodeIndex) => {
         this.indices[linkIndex * 4 + 0] = connectedNodeIndex % pointsTextureSize
         this.indices[linkIndex * 4 + 1] = Math.floor(connectedNodeIndex / pointsTextureSize)
+        this.indices[linkIndex * 4 + 2] = nodeIndex % pointsTextureSize
+        this.indices[linkIndex * 4 + 3] = Math.floor(nodeIndex / pointsTextureSize)
         const degree = data.degree[data.getInputIndexBySortedIndex(connectedNodeIndex) as number] ?? 0
         const connectedDegree = data.degree[data.getInputIndexBySortedIndex(nodeIndex) as number] ?? 0
         const bias = degree / (degree + connectedDegree)
@@ -50,9 +56,9 @@ export class ForceLink<N extends CosmosInputNode, L extends CosmosInputLink> ext
 
         linkIndex += 1
       })
-
       this.maxPointDegree = Math.max(this.maxPointDegree, connectedNodeIndices.size)
     })
+    this.totalLinks = linkIndex
 
     this.linkFirstIndicesAndAmountFbo = reglInstance.framebuffer({
       color: reglInstance.texture({
@@ -114,11 +120,59 @@ export class ForceLink<N extends CosmosInputNode, L extends CosmosInputLink> ext
         linksTextureSize: () => store.linksTextureSize,
         alpha: () => store.alpha,
       },
+      blend: {
+        enable: true,
+        func: {
+          src: 'one',
+          dst: 'one',
+        },
+        equation: {
+          rgb: 'add',
+          alpha: 'add',
+        },
+      },
+      depth: { enable: false, mask: false },
+      stencil: { enable: false },
+    })
+
+    this.quickRunCmd = reglInstance({
+      frag: quickFrag,
+      vert: quickVert,
+      framebuffer: () => points?.velocityFbo as regl.Framebuffer2D,
+      primitive: 'points',
+      count: this.totalLinks,
+      attributes: { linkTextureIndex: createIndexesBuffer(reglInstance, store.linksTextureSize) },
+      uniforms: {
+        position: () => points?.previousPositionFbo,
+        linkSpring: () => config.simulation?.linkSpring,
+        linkDistance: () => config.simulation?.linkDistance,
+        linkDistRandomVariationRange: () => config.simulation?.linkDistRandomVariationRange,
+        linkFirstIndicesAndAmount: () => this.linkFirstIndicesAndAmountFbo,
+        linkIndices: () => this.indicesFbo,
+        linkBiasAndStrength: () => this.biasAndStrengthFbo,
+        linkRandomDistanceFbo: () => this.randomDistanceFbo,
+        pointsTextureSize: () => store.pointsTextureSize,
+        linksTextureSize: () => store.linksTextureSize,
+        alpha: () => store.alpha,
+      },
+      blend: {
+        enable: true,
+        func: {
+          src: 'one',
+          dst: 'one',
+        },
+        equation: {
+          rgb: 'add',
+          alpha: 'add',
+        },
+      },
+      depth: { enable: false, mask: false },
+      stencil: { enable: false },
     })
   }
 
   public run (): void {
-    this.runCommand?.()
+    this.quickRunCmd?.()
   }
 
   public destroy (): void {

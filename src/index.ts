@@ -676,14 +676,14 @@ export class Graph<N extends CosmosInputNode, L extends CosmosInputLink> {
           }
 
           this.forceManyBody?.run()
-          this.points.updatePosition()
 
           if (this.store.linksTextureSize) {
             this.forceLinkIncoming?.run()
-            this.points.updatePosition()
+            // this.points.updatePosition()
             this.forceLinkOutgoing?.run()
-            this.points.updatePosition()
+            // this.points.updatePosition()
           }
+          this.points.updatePosition()
 
           this.store.alpha += this.store.addAlpha(this.config.simulation.decay ?? defaultConfigValues.simulation.decay)
           if (this.isRightClickMouse) this.store.alpha = Math.max(this.store.alpha, 0.1)
