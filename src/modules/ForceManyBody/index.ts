@@ -4,6 +4,8 @@ import calculateLevelFrag from '@/graph/modules/ForceManyBody/calculate-level.fr
 import calculateLevelVert from '@/graph/modules/ForceManyBody/calculate-level.vert'
 import calculateNextLevel from '@/graph/modules/ForceManyBody/calc-next-level.frag'
 import forceFrag from '@/graph/modules/ForceManyBody/force-level.frag'
+import quickvert from '@/graph/modules/ForceManyBody/quick-level.vert'
+import quickfrag from '@/graph/modules/ForceManyBody/quick-level.frag'
 import forceCenterFrag from '@/graph/modules/ForceManyBody/force-centermass.frag'
 import { createIndexesBuffer, createQuadBuffer, destroyFramebuffer } from '@/graph/modules/Shared/buffer'
 import clearFrag from '@/graph/modules/Shared/clear.frag'
@@ -17,6 +19,7 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
   private clearVelocityCommand: regl.DrawCommand | undefined
   private calculateLevelsCommand: regl.DrawCommand | undefined
   private forceCommand: regl.DrawCommand | undefined
+  private quickForce: regl.DrawCommand | undefined
   private forceFromItsOwnCentermassCommand: regl.DrawCommand | undefined
   private quadtreeLevels = 0
   private calculateNextLevel: regl.DrawCommand | undefined
@@ -118,6 +121,44 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
       stencil: { enable: false },
     })
 
+    const inputSize = Math.ceil(Math.sqrt(data.nodes.length))
+    this.quickForce = reglInstance({
+      frag: quickfrag,
+      vert: quickvert,
+      framebuffer: () => points?.velocityFbo as regl.Framebuffer2D,
+      primitive: 'points',
+      count: data.nodes.length,
+      attributes: { idxVec: createIndexesBuffer(reglInstance, store.pointsTextureSize) },
+      uniforms: {
+        position: () => points?.previousPositionFbo,
+        level: (_, props: { levelFbo: regl.Framebuffer2D; levelTextureSize: number; level: number }) => props.level,
+        maxlevel: this.quadtreeLevels,
+        levels: this.quadtreeLevels,
+        levelFbo: (_, props) => props.levelFbo,
+        // levelTextureSize: (_, props) => props.levelTextureSize,
+        alpha: () => store.alpha,
+        repulsion: () => config.simulation?.repulsion,
+        spaceSize: () => store.adjustedSpaceSize,
+        theta: () => config.simulation?.repulsionTheta,
+        positionTextureSize: () => store.pointsTextureSize,
+        inputSize,
+        nodeslen: data.nodes.length,
+        // ...Object.fromEntries(this.levelsFbos),
+      },
+      blend: {
+        enable: true,
+        func: {
+          src: 'one',
+          dst: 'one',
+        },
+        equation: {
+          rgb: 'add',
+          alpha: 'add',
+        },
+      },
+      depth: { enable: false, mask: false },
+      stencil: { enable: false },
+    })
     this.forceCommand = reglInstance({
       frag: forceFrag,
       vert: updateVert,
