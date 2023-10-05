@@ -38,6 +38,7 @@ export class Points<N extends CosmosInputNode, L extends CosmosInputLink> extend
   private trackPointsCommand: regl.DrawCommand | undefined
   private trackedIds: string[] | undefined
   private trackedPositionsById: Map<string, [number, number]> = new Map()
+  private clearVelocityCommand: regl.DrawCommand | undefined
 
   public create (): void {
     const { reglInstance, store, data } = this
@@ -278,6 +279,18 @@ export class Points<N extends CosmosInputNode, L extends CosmosInputLink> extend
         pointsTextureSize: () => store.pointsTextureSize,
       },
     })
+    this.clearVelocityCommand = reglInstance({
+      frag: clearFrag,
+      vert: updateVert,
+      framebuffer: () => this.velocityFbo as regl.Framebuffer2D,
+      primitive: 'triangle strip',
+      count: 4,
+      attributes: { quad: createQuadBuffer(reglInstance) },
+    })
+  }
+
+  public clearVelocity (): void {
+    this.clearVelocityCommand?.()
   }
 
   public updateColor (): void {

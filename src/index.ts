@@ -679,7 +679,9 @@ export class Graph<N extends CosmosInputNode, L extends CosmosInputLink> {
 
           if (this.store.linksTextureSize) {
             this.forceLinkIncoming?.run()
-            // this.points.updatePosition()
+            this.points.updatePosition()
+
+            this.points.clearVelocity()
             this.forceLinkOutgoing?.run()
             // this.points.updatePosition()
           }
