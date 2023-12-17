@@ -66,15 +66,7 @@ export class Points<N extends CosmosInputNode, L extends CosmosInputLink> extend
     })
 
     if (!this.config.disableSimulation) {
-      this.previousPositionFbo = reglInstance.framebuffer({
-        color: reglInstance.texture({
-          data: initialState,
-          shape: [pointsTextureSize, pointsTextureSize, 4],
-          type: 'float',
-        }),
-        depth: false,
-        stencil: false,
-      })
+      this.previousPositionFbo = this.currentPositionFbo
 
       // Create velocity buffer
       this.velocityFbo = reglInstance.framebuffer({
@@ -122,10 +114,20 @@ export class Points<N extends CosmosInputNode, L extends CosmosInputLink> extend
         count: 4,
         attributes: { quad: createQuadBuffer(reglInstance) },
         uniforms: {
-          position: () => this.previousPositionFbo,
           velocity: () => this.velocityFbo,
           friction: () => config.simulation?.friction,
           spaceSize: () => store.adjustedSpaceSize,
+        },
+        blend: {
+          enable: true,
+          func: {
+            src: 'one',
+            dst: 'one',
+          },
+          equation: {
+            rgb: 'add',
+            alpha: 'add',
+          },
         },
       })
     }
@@ -366,7 +368,7 @@ export class Points<N extends CosmosInputNode, L extends CosmosInputLink> extend
 
   public destroy (): void {
     destroyFramebuffer(this.currentPositionFbo)
-    destroyFramebuffer(this.previousPositionFbo)
+    // destroyFramebuffer(this.previousPositionFbo)
     destroyFramebuffer(this.velocityFbo)
     destroyFramebuffer(this.selectedFbo)
     destroyFramebuffer(this.colorFbo)

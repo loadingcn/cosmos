@@ -18,10 +18,8 @@ void main() {
   vec2 distVector = centermassPosition - pointPosition.xy;
   float dist = sqrt(dot(distVector, distVector));
   if (dist > 0.0) {
-    float angle = atan(distVector.y, distVector.x);
     float addV = alpha * center * dist * 0.01;
-    velocity.rg += addV * vec2(cos(angle), sin(angle));
+    velocity.rg += addV * distVector / dist;
   }
-
   gl_FragColor = velocity;
 }

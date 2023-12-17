@@ -75,6 +75,17 @@ export class ForceCenter<N extends CosmosInputNode, L extends CosmosInputLink> e
         center: () => config.simulation?.center,
         alpha: () => store.alpha,
       },
+      blend: {
+        enable: true,
+        func: {
+          src: 'one',
+          dst: 'one',
+        },
+        equation: {
+          rgb: 'add',
+          alpha: 'add',
+        },
+      },
     })
   }
 

@@ -667,12 +667,12 @@ export class Graph<N extends CosmosInputNode, L extends CosmosInputLink> {
         if ((isSimulationRunning && !this.zoomInstance.isRunning)) {
           if (simulation.gravity) {
             this.forceGravity?.run()
-            this.points.updatePosition()
+            // this.points.updatePosition()
           }
 
           if (simulation.center) {
             this.forceCenter?.run()
-            this.points.updatePosition()
+            // this.points.updatePosition()
           }
 
           this.forceManyBody?.run()

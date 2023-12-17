@@ -18,6 +18,7 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
   private forceCommand: regl.DrawCommand | undefined
   private forceFromItsOwnCentermassCommand: regl.DrawCommand | undefined
   private quadtreeLevels = 0
+  private theta: number | undefined
 
   public create (): void {
     const { reglInstance, store } = this
@@ -25,7 +26,7 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
     this.quadtreeLevels = Math.log2(store.adjustedSpaceSize)
     for (let i = 0; i < this.quadtreeLevels; i += 1) {
       const levelTextureSize = Math.pow(2, i + 1)
-      this.levelsFbos.set(`level[${i}]`, reglInstance.framebuffer({
+      this.levelsFbos.set(`levelFbo[${i}]`, reglInstance.framebuffer({
         shape: [levelTextureSize, levelTextureSize],
         colorType: 'float',
         depth: false,
@@ -53,6 +54,7 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
 
   public initPrograms (): void {
     const { reglInstance, config, store, data, points } = this
+    this.theta = config.simulation?.repulsionTheta
     this.clearLevelsCommand = reglInstance({
       frag: clearFrag,
       vert: updateVert,
@@ -99,13 +101,15 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
       uniforms: {
         position: () => points?.previousPositionFbo,
         level: (_, props: { levelFbo: regl.Framebuffer2D; levelTextureSize: number; level: number }) => props.level,
+        maxlevel: this.quadtreeLevels,
         levels: this.quadtreeLevels,
         levelFbo: (_, props) => props.levelFbo,
-        levelTextureSize: (_, props) => props.levelTextureSize,
+        // levelTextureSize: (_, props) => props.levelTextureSize,
         alpha: () => store.alpha,
         repulsion: () => config.simulation?.repulsion,
         spaceSize: () => store.adjustedSpaceSize,
         theta: () => config.simulation?.repulsionTheta,
+        // ...Object.fromEntries(this.levelsFbos),
       },
       blend: {
         enable: true,
@@ -164,32 +168,36 @@ export class ForceManyBody<N extends CosmosInputNode, L extends CosmosInputLink>
   public run (): void {
     const { store } = this
     for (let i = 0; i < this.quadtreeLevels; i += 1) {
-      this.clearLevelsCommand?.({ levelFbo: this.levelsFbos.get(`level[${i}]`) })
+      this.clearLevelsCommand?.({ levelFbo: this.levelsFbos.get(`levelFbo[${i}]`) })
       const levelTextureSize = Math.pow(2, i + 1)
       const cellSize = store.adjustedSpaceSize / levelTextureSize
       this.calculateLevelsCommand?.({
-        levelFbo: this.levelsFbos.get(`level[${i}]`),
+        levelFbo: this.levelsFbos.get(`levelFbo[${i}]`),
         levelTextureSize,
         cellSize,
       })
     }
-    this.clearVelocityCommand?.()
-    for (let i = 0; i < this.quadtreeLevels; i += 1) {
-      const levelTextureSize = Math.pow(2, i + 1)
+
+    // this.clearVelocityCommand?.()
+    // this.forceCommand?.()
+
+    let levelTextureSize = 0.0
+    const totalLv = Math.floor(this.quadtreeLevels / 1)
+    for (let i = 0; i < totalLv; i += 1) {
+      levelTextureSize = Math.pow(2, i + 1)
       this.forceCommand?.({
-        levelFbo: this.levelsFbos.get(`level[${i}]`),
+        levelFbo: this.levelsFbos.get(`levelFbo[${i}]`),
         levelTextureSize,
         level: i,
       })
-
-      if (i === this.quadtreeLevels - 1) {
-        this.forceFromItsOwnCentermassCommand?.({
-          levelFbo: this.levelsFbos.get(`level[${i}]`),
-          levelTextureSize,
-          level: i,
-        })
-      }
     }
+
+    levelTextureSize = Math.pow(2, totalLv)
+    this.forceFromItsOwnCentermassCommand?.({
+      levelFbo: this.levelsFbos.get(`levelFbo[${totalLv - 1}]`),
+      levelTextureSize,
+      level: totalLv - 1,
+    })
   }
 
   public destroy (): void {
